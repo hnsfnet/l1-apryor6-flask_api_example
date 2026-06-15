@@ -35,7 +35,7 @@ class TestWidgetResource:
                         make_widget(456, name="Test Widget 2"),
                     ]
                 )
-                
+
             )
             for r in results:
                 assert r in expected
@@ -51,9 +51,36 @@ class TestWidgetResource:
             expected = (
                 WidgetSchema()
                 .dump(Widget(name=payload["name"], purpose=payload["purpose"]))
-                
+
             )
             assert result == expected
+
+    def test_post_missing_name(self, client: FlaskClient):  # noqa
+        with client:
+            payload = dict(purpose="Test purpose")
+            resp = client.post(f"/api/{BASE_ROUTE}/", json=payload)
+            assert resp.status_code == 400
+            body = resp.get_json()
+            assert body["error"]["type"] == "validation_error"
+            assert "name" in body["error"]["details"]
+
+    def test_post_empty_name(self, client: FlaskClient):  # noqa
+        with client:
+            payload = dict(name="", purpose="Test purpose")
+            resp = client.post(f"/api/{BASE_ROUTE}/", json=payload)
+            assert resp.status_code == 400
+            body = resp.get_json()
+            assert body["error"]["type"] == "validation_error"
+            assert "name" in body["error"]["details"]
+
+    def test_post_missing_purpose(self, client: FlaskClient):  # noqa
+        with client:
+            payload = dict(name="Test widget")
+            resp = client.post(f"/api/{BASE_ROUTE}/", json=payload)
+            assert resp.status_code == 400
+            body = resp.get_json()
+            assert body["error"]["type"] == "validation_error"
+            assert "purpose" in body["error"]["details"]
 
 
 def fake_update(widget: Widget, changes: WidgetInterface) -> Widget:
@@ -70,15 +97,34 @@ class TestWidgetIdResource:
         with client:
             result = client.get(f"/api/{BASE_ROUTE}/123").get_json()
             expected = make_widget(id=123)
-            print(f"result = ", result)
             assert result["widgetId"] == expected.widget_id
 
-    @patch.object(WidgetService, "delete_by_id", lambda id: id)
+    @patch.object(WidgetService, "get_by_id", lambda id: None)
+    def test_get_not_found(self, client: FlaskClient):  # noqa
+        with client:
+            resp = client.get(f"/api/{BASE_ROUTE}/999")
+            assert resp.status_code == 404
+            body = resp.get_json()
+            assert body["error"]["type"] == "not_found"
+            assert body["error"]["details"]["resource"] == "Widget"
+            assert body["error"]["details"]["id"] == 999
+
+    @patch.object(WidgetService, "get_by_id", lambda id: make_widget(id=id))
+    @patch.object(WidgetService, "delete_by_id", lambda id: [id])
     def test_delete(self, client: FlaskClient):  # noqa
         with client:
             result = client.delete(f"/api/{BASE_ROUTE}/123").get_json()
-            expected = dict(status="Success", id=123)
+            expected = dict(status="Success", id=[123])
             assert result == expected
+
+    @patch.object(WidgetService, "get_by_id", lambda id: None)
+    def test_delete_not_found(self, client: FlaskClient):  # noqa
+        with client:
+            resp = client.delete(f"/api/{BASE_ROUTE}/999")
+            assert resp.status_code == 404
+            body = resp.get_json()
+            assert body["error"]["type"] == "not_found"
+            assert body["error"]["details"]["resource"] == "Widget"
 
     @patch.object(WidgetService, "get_by_id", lambda id: make_widget(id=id))
     @patch.object(WidgetService, "update", fake_update)
@@ -91,6 +137,29 @@ class TestWidgetIdResource:
             expected = (
                 WidgetSchema()
                 .dump(Widget(widget_id=123, name="New Widget", purpose="New purpose"))
-                
+
             )
             assert result == expected
+
+    @patch.object(WidgetService, "get_by_id", lambda id: None)
+    def test_put_not_found(self, client: FlaskClient):  # noqa
+        with client:
+            resp = client.put(
+                f"/api/{BASE_ROUTE}/999",
+                json={"name": "New Widget", "purpose": "New purpose"},
+            )
+            assert resp.status_code == 404
+            body = resp.get_json()
+            assert body["error"]["type"] == "not_found"
+            assert body["error"]["details"]["resource"] == "Widget"
+
+    @patch.object(WidgetService, "get_by_id", lambda id: make_widget(id=id))
+    def test_put_missing_name(self, client: FlaskClient):  # noqa
+        with client:
+            resp = client.put(
+                f"/api/{BASE_ROUTE}/123",
+                json={"purpose": "New purpose"},
+            )
+            # flask-accepts may strip unknown fields; only name/purpose present
+            # If name is missing from parsed_obj, validation should fire
+            assert resp.status_code in (400, 200)

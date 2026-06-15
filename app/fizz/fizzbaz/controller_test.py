@@ -37,7 +37,7 @@ class TestFizzbazResource:
                         make_fizzbaz(456, name="Test Fizzbaz 2"),
                     ]
                 )
-                
+
             )
             for r in results:
                 assert r in expected
@@ -53,9 +53,36 @@ class TestFizzbazResource:
             expected = (
                 FizzbazSchema()
                 .dump(Fizzbaz(name=payload["name"], purpose=payload["purpose"]))
-                
+
             )
             assert result == expected
+
+    def test_post_missing_name(self, client: FlaskClient):  # noqa
+        with client:
+            payload = dict(purpose="Test purpose")
+            resp = client.post(f"/api/{BASE_ROUTE}/fizzbaz/", json=payload)
+            assert resp.status_code == 400
+            body = resp.get_json()
+            assert body["error"]["type"] == "validation_error"
+            assert "name" in body["error"]["details"]
+
+    def test_post_empty_name(self, client: FlaskClient):  # noqa
+        with client:
+            payload = dict(name="", purpose="Test purpose")
+            resp = client.post(f"/api/{BASE_ROUTE}/fizzbaz/", json=payload)
+            assert resp.status_code == 400
+            body = resp.get_json()
+            assert body["error"]["type"] == "validation_error"
+            assert "name" in body["error"]["details"]
+
+    def test_post_missing_purpose(self, client: FlaskClient):  # noqa
+        with client:
+            payload = dict(name="Test fizzbaz")
+            resp = client.post(f"/api/{BASE_ROUTE}/fizzbaz/", json=payload)
+            assert resp.status_code == 400
+            body = resp.get_json()
+            assert body["error"]["type"] == "validation_error"
+            assert "purpose" in body["error"]["details"]
 
 
 def fake_update(fizzbaz: Fizzbaz, changes: FizzbazInterface) -> Fizzbaz:
@@ -74,12 +101,32 @@ class TestFizzbazIdResource:
             expected = Fizzbaz(fizzbaz_id=123)
             assert result["fizzbazId"] == expected.fizzbaz_id
 
+    @patch.object(FizzbazService, "get_by_id", lambda id: None)
+    def test_get_not_found(self, client: FlaskClient):  # noqa
+        with client:
+            resp = client.get(f"/api/{BASE_ROUTE}/fizzbaz/999")
+            assert resp.status_code == 404
+            body = resp.get_json()
+            assert body["error"]["type"] == "not_found"
+            assert body["error"]["details"]["resource"] == "Fizzbaz"
+            assert body["error"]["details"]["id"] == 999
+
+    @patch.object(FizzbazService, "get_by_id", lambda id: make_fizzbaz(id=id))
     @patch.object(FizzbazService, "delete_by_id", lambda id: [id])
     def test_delete(self, client: FlaskClient):  # noqa
         with client:
             result = client.delete(f"/api/{BASE_ROUTE}/fizzbaz/123").get_json()
             expected = dict(status="Success", id=[123])
             assert result == expected
+
+    @patch.object(FizzbazService, "get_by_id", lambda id: None)
+    def test_delete_not_found(self, client: FlaskClient):  # noqa
+        with client:
+            resp = client.delete(f"/api/{BASE_ROUTE}/fizzbaz/999")
+            assert resp.status_code == 404
+            body = resp.get_json()
+            assert body["error"]["type"] == "not_found"
+            assert body["error"]["details"]["resource"] == "Fizzbaz"
 
     @patch.object(FizzbazService, "get_by_id", lambda id: make_fizzbaz(id=id))
     @patch.object(FizzbazService, "update", fake_update)
@@ -94,6 +141,18 @@ class TestFizzbazIdResource:
                 .dump(
                     Fizzbaz(fizzbaz_id=123, name="New Fizzbaz", purpose="New purpose")
                 )
-                
+
             )
             assert result == expected
+
+    @patch.object(FizzbazService, "get_by_id", lambda id: None)
+    def test_put_not_found(self, client: FlaskClient):  # noqa
+        with client:
+            resp = client.put(
+                f"/api/{BASE_ROUTE}/fizzbaz/999",
+                json={"name": "New Fizzbaz", "purpose": "New purpose"},
+            )
+            assert resp.status_code == 404
+            body = resp.get_json()
+            assert body["error"]["type"] == "not_found"
+            assert body["error"]["details"]["resource"] == "Fizzbaz"
