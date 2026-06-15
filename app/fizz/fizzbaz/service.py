@@ -1,13 +1,22 @@
 from app import db
-from typing import List
+from typing import Any, Dict, List
 from .model import Fizzbaz
 from .interface import FizzbazInterface
+from app.shared.query.service import QueryService
 
 
-class FizzbazService():
+class FizzbazService:
     @staticmethod
-    def get_all() -> List[Fizzbaz]:
-        return Fizzbaz.query.all()
+    def get_all(query_params: Dict[str, Any] = None) -> Dict[str, Any]:
+        if query_params is None:
+            query_params = {}
+        return QueryService.get_list(
+            model_class=Fizzbaz,
+            id_column=Fizzbaz.fizzbaz_id,
+            name_column=Fizzbaz.name,
+            purpose_column=Fizzbaz.purpose,
+            **query_params,
+        )
 
     @staticmethod
     def get_by_id(fizzbaz_id: int) -> Fizzbaz:
@@ -30,10 +39,7 @@ class FizzbazService():
 
     @staticmethod
     def create(new_attrs: FizzbazInterface) -> Fizzbaz:
-        new_fizzbaz = Fizzbaz(
-            name=new_attrs['name'],
-            purpose=new_attrs['purpose']
-        )
+        new_fizzbaz = Fizzbaz(name=new_attrs["name"], purpose=new_attrs["purpose"])
 
         db.session.add(new_fizzbaz)
         db.session.commit()

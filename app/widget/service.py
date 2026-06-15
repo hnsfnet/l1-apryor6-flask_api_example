@@ -1,13 +1,22 @@
 from app import db
-from typing import List
+from typing import Any, Dict, List
 from .model import Widget
 from .interface import WidgetInterface
+from app.shared.query.service import QueryService
 
 
 class WidgetService:
     @staticmethod
-    def get_all() -> List[Widget]:
-        return Widget.query.all()
+    def get_all(query_params: Dict[str, Any] = None) -> Dict[str, Any]:
+        if query_params is None:
+            query_params = {}
+        return QueryService.get_list(
+            model_class=Widget,
+            id_column=Widget.widget_id,
+            name_column=Widget.name,
+            purpose_column=Widget.purpose,
+            **query_params,
+        )
 
     @staticmethod
     def get_by_id(widget_id: int) -> Widget:

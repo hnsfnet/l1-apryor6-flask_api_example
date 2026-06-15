@@ -1,13 +1,22 @@
 from app import db
-from typing import List
+from typing import Any, Dict, List
 from .model import Fizzbar
 from .interface import FizzbarInterface
+from app.shared.query.service import QueryService
 
 
 class FizzbarService:
     @staticmethod
-    def get_all() -> List[Fizzbar]:
-        return Fizzbar.query.all()
+    def get_all(query_params: Dict[str, Any] = None) -> Dict[str, Any]:
+        if query_params is None:
+            query_params = {}
+        return QueryService.get_list(
+            model_class=Fizzbar,
+            id_column=Fizzbar.fizzbar_id,
+            name_column=Fizzbar.name,
+            purpose_column=Fizzbar.purpose,
+            **query_params,
+        )
 
     @staticmethod
     def get_by_id(fizzbar_id: int) -> Fizzbar:

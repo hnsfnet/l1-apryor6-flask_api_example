@@ -15,32 +15,119 @@ def make_fizzbar(
     return Fizzbar(fizzbar_id=id, name=name, purpose=purpose)
 
 
+def make_paginated_result(items, total=None, page=1, per_page=20):
+    from math import ceil
+
+    if total is None:
+        total = len(items)
+    pages = ceil(total / per_page) if total > 0 else 0
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "pages": pages,
+    }
+
+
 class TestFizzbarResource:
     @patch.object(
         FizzbarService,
         "get_all",
-        lambda: [
-            make_fizzbar(123, name="Test Fizzbar 1"),
-            make_fizzbar(456, name="Test Fizzbar 2"),
-        ],
+        lambda query_params=None: make_paginated_result(
+            [
+                make_fizzbar(123, name="Test Fizzbar 1"),
+                make_fizzbar(456, name="Test Fizzbar 2"),
+            ]
+        ),
     )
     def test_get(self, client: FlaskClient):  # noqa
         with client:
-            results = client.get(
-                f"/api/{BASE_ROUTE}/fizzbar", follow_redirects=True
-            ).get_json()
-            expected = (
-                FizzbarSchema(many=True)
-                .dump(
-                    [
-                        make_fizzbar(123, name="Test Fizzbar 1"),
-                        make_fizzbar(456, name="Test Fizzbar 2"),
-                    ]
-                )
-                
+            response = client.get(
+                f"/api/{BASE_ROUTE}/fizzbar/", follow_redirects=True
             )
-            for r in results:
-                assert r in expected
+            data = response.get_json()
+            assert data["total"] == 2
+            assert data["page"] == 1
+            assert data["per_page"] == 20
+            assert data["pages"] == 1
+            expected = FizzbarSchema(many=True).dump(
+                [
+                    make_fizzbar(123, name="Test Fizzbar 1"),
+                    make_fizzbar(456, name="Test Fizzbar 2"),
+                ]
+            )
+            for item in data["items"]:
+                assert item in expected
+
+    @patch.object(
+        FizzbarService,
+        "get_all",
+        lambda query_params=None: make_paginated_result([], total=0),
+    )
+    def test_get_empty(self, client: FlaskClient):  # noqa
+        with client:
+            response = client.get(
+                f"/api/{BASE_ROUTE}/fizzbar/", follow_redirects=True
+            )
+            data = response.get_json()
+            assert data["total"] == 0
+            assert data["items"] == []
+            assert data["pages"] == 0
+
+    @patch.object(
+        FizzbarService,
+        "get_all",
+        lambda query_params=None: make_paginated_result(
+            [make_fizzbar(1, name="Alpha")],
+            total=50,
+            page=3,
+            per_page=10,
+        ),
+    )
+    def test_get_with_pagination_params(self, client: FlaskClient):  # noqa
+        with client:
+            response = client.get(
+                f"/api/{BASE_ROUTE}/fizzbar/?page=3&per_page=10",
+                follow_redirects=True,
+            )
+            data = response.get_json()
+            assert data["page"] == 3
+            assert data["per_page"] == 10
+            assert data["total"] == 50
+            assert data["pages"] == 5
+
+    @patch.object(
+        FizzbarService,
+        "get_all",
+        lambda query_params=None: make_paginated_result(
+            [make_fizzbar(1, name="Match")],
+            total=1,
+        ),
+    )
+    def test_get_with_search(self, client: FlaskClient):  # noqa
+        with client:
+            response = client.get(
+                f"/api/{BASE_ROUTE}/fizzbar/?search=Match",
+                follow_redirects=True,
+            )
+            data = response.get_json()
+            assert data["total"] == 1
+
+    def test_get_with_invalid_params_uses_defaults(self, client: FlaskClient):  # noqa
+        with patch.object(
+            FizzbarService,
+            "get_all",
+            lambda query_params=None: make_paginated_result([]),
+        ):
+            with client:
+                response = client.get(
+                    f"/api/{BASE_ROUTE}/fizzbar/?page=abc&sort_by=bogus",
+                    follow_redirects=True,
+                )
+                data = response.get_json()
+                assert data["page"] == 1
+                assert data["per_page"] == 20
 
     @patch.object(
         FizzbarService, "create", lambda create_request: Fizzbar(**create_request)
@@ -50,10 +137,8 @@ class TestFizzbarResource:
 
             payload = dict(name="Test fizzbar", purpose="Test purpose")
             result = client.post(f"/api/{BASE_ROUTE}/fizzbar/", json=payload).get_json()
-            expected = (
-                FizzbarSchema()
-                .dump(Fizzbar(name=payload["name"], purpose=payload["purpose"]))
-                
+            expected = FizzbarSchema().dump(
+                Fizzbar(name=payload["name"], purpose=payload["purpose"])
             )
             assert result == expected
 
@@ -89,11 +174,7 @@ class TestFizzbarIdResource:
                 f"/api/{BASE_ROUTE}/fizzbar/123",
                 json={"name": "New Fizzbar", "purpose": "New purpose"},
             ).get_json()
-            expected = (
-                FizzbarSchema()
-                .dump(
-                    Fizzbar(fizzbar_id=123, name="New Fizzbar", purpose="New purpose")
-                )
-                
+            expected = FizzbarSchema().dump(
+                Fizzbar(fizzbar_id=123, name="New Fizzbar", purpose="New purpose")
             )
             assert result == expected

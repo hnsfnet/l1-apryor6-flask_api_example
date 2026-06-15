@@ -15,30 +15,135 @@ def make_widget(
     return Widget(widget_id=id, name=name, purpose=purpose)
 
 
+def make_paginated_result(items, total=None, page=1, per_page=20):
+    """Helper to build a paginated result dict matching QueryService output."""
+    from math import ceil
+
+    if total is None:
+        total = len(items)
+    pages = ceil(total / per_page) if total > 0 else 0
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "pages": pages,
+    }
+
+
 class TestWidgetResource:
     @patch.object(
         WidgetService,
         "get_all",
-        lambda: [
-            make_widget(123, name="Test Widget 1"),
-            make_widget(456, name="Test Widget 2"),
-        ],
+        lambda query_params=None: make_paginated_result(
+            [
+                make_widget(123, name="Test Widget 1"),
+                make_widget(456, name="Test Widget 2"),
+            ]
+        ),
     )
     def test_get(self, client: FlaskClient):  # noqa
         with client:
-            results = client.get(f"/api/{BASE_ROUTE}", follow_redirects=True).get_json()
-            expected = (
-                WidgetSchema(many=True)
-                .dump(
-                    [
-                        make_widget(123, name="Test Widget 1"),
-                        make_widget(456, name="Test Widget 2"),
-                    ]
-                )
-                
+            response = client.get(f"/api/{BASE_ROUTE}/", follow_redirects=True)
+            data = response.get_json()
+            # Check pagination metadata
+            assert data["total"] == 2
+            assert data["page"] == 1
+            assert data["per_page"] == 20
+            assert data["pages"] == 1
+            # Check items
+            expected = WidgetSchema(many=True).dump(
+                [
+                    make_widget(123, name="Test Widget 1"),
+                    make_widget(456, name="Test Widget 2"),
+                ]
             )
-            for r in results:
-                assert r in expected
+            for item in data["items"]:
+                assert item in expected
+
+    @patch.object(
+        WidgetService,
+        "get_all",
+        lambda query_params=None: make_paginated_result([], total=0),
+    )
+    def test_get_empty(self, client: FlaskClient):  # noqa
+        with client:
+            response = client.get(f"/api/{BASE_ROUTE}/", follow_redirects=True)
+            data = response.get_json()
+            assert data["total"] == 0
+            assert data["items"] == []
+            assert data["pages"] == 0
+
+    @patch.object(
+        WidgetService,
+        "get_all",
+        lambda query_params=None: make_paginated_result(
+            [make_widget(1, name="Alpha")],
+            total=50,
+            page=3,
+            per_page=10,
+        ),
+    )
+    def test_get_with_pagination_params(self, client: FlaskClient):  # noqa
+        with client:
+            response = client.get(
+                f"/api/{BASE_ROUTE}/?page=3&per_page=10", follow_redirects=True
+            )
+            data = response.get_json()
+            assert data["page"] == 3
+            assert data["per_page"] == 10
+            assert data["total"] == 50
+            assert data["pages"] == 5
+
+    @patch.object(
+        WidgetService,
+        "get_all",
+        lambda query_params=None: make_paginated_result(
+            [make_widget(1, name="Match")],
+            total=1,
+        ),
+    )
+    def test_get_with_search(self, client: FlaskClient):  # noqa
+        with client:
+            response = client.get(
+                f"/api/{BASE_ROUTE}/?search=Match", follow_redirects=True
+            )
+            data = response.get_json()
+            assert data["total"] == 1
+            assert len(data["items"]) == 1
+
+    @patch.object(
+        WidgetService,
+        "get_all",
+        lambda query_params=None: make_paginated_result(
+            [make_widget(1, name="Zeta"), make_widget(2, name="Alpha")],
+            total=2,
+        ),
+    )
+    def test_get_with_sorting(self, client: FlaskClient):  # noqa
+        with client:
+            response = client.get(
+                f"/api/{BASE_ROUTE}/?sort_by=name&sort_order=asc",
+                follow_redirects=True,
+            )
+            data = response.get_json()
+            assert data["total"] == 2
+
+    def test_get_with_invalid_params_uses_defaults(self, client: FlaskClient):  # noqa
+        """Invalid query params should not crash; defaults are applied."""
+        with patch.object(
+            WidgetService,
+            "get_all",
+            lambda query_params=None: make_paginated_result([]),
+        ):
+            with client:
+                response = client.get(
+                    f"/api/{BASE_ROUTE}/?page=abc&per_page=xyz&sort_by=bogus&sort_order=sideways",
+                    follow_redirects=True,
+                )
+                data = response.get_json()
+                assert data["page"] == 1
+                assert data["per_page"] == 20
 
     @patch.object(
         WidgetService, "create", lambda create_request: Widget(**create_request)
@@ -48,10 +153,8 @@ class TestWidgetResource:
 
             payload = dict(name="Test widget", purpose="Test purpose")
             result = client.post(f"/api/{BASE_ROUTE}/", json=payload).get_json()
-            expected = (
-                WidgetSchema()
-                .dump(Widget(name=payload["name"], purpose=payload["purpose"]))
-                
+            expected = WidgetSchema().dump(
+                Widget(name=payload["name"], purpose=payload["purpose"])
             )
             assert result == expected
 
@@ -88,9 +191,7 @@ class TestWidgetIdResource:
                 f"/api/{BASE_ROUTE}/123",
                 json={"name": "New Widget", "purpose": "New purpose"},
             ).get_json()
-            expected = (
-                WidgetSchema()
-                .dump(Widget(widget_id=123, name="New Widget", purpose="New purpose"))
-                
+            expected = WidgetSchema().dump(
+                Widget(widget_id=123, name="New Widget", purpose="New purpose")
             )
             assert result == expected
