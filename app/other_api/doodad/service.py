@@ -1,7 +1,10 @@
 from app import db
-from typing import List
+from typing import Any, Dict, List, Sequence
+from app.shared.bulk import BulkService
 from .model import Doodad
 from .interface import DoodadInterface
+
+DOODAD_FIELDS = ("name", "purpose")
 
 
 class DoodadService:
@@ -36,3 +39,13 @@ class DoodadService:
         db.session.commit()
 
         return new_doodad
+
+    @staticmethod
+    def create_bulk(items: Sequence[DoodadInterface]) -> Dict[str, Any]:
+        """Create many Doodads, reporting per-item success/failure."""
+        return BulkService.bulk_create(Doodad, items, DOODAD_FIELDS)
+
+    @staticmethod
+    def delete_bulk(doodad_ids: Sequence[int]) -> Dict[str, Any]:
+        """Delete many Doodads by id, reporting which ids were not found."""
+        return BulkService.bulk_delete(Doodad, Doodad.doodad_id, doodad_ids)

@@ -1,6 +1,6 @@
 from flask import request
 from flask_accepts import accepts, responds
-from flask_restx import Namespace, Resource
+from flask_restx import Namespace, Resource, fields as rx_fields
 from flask.wrappers import Response
 from typing import List
 
@@ -10,6 +10,75 @@ from .model import Doodad
 from .interface import DoodadInterface
 
 api = Namespace("Doodad", description="A modular namespace within Other API")  # noqa
+
+doodad_item = api.model(
+    "DoodadInput",
+    {
+        "name": rx_fields.String(required=True, description="Doodad name"),
+        "purpose": rx_fields.String(required=True, description="Doodad purpose"),
+    },
+)
+
+doodad_entity = api.model(
+    "Doodad",
+    {
+        "doodadId": rx_fields.Integer(description="Doodad database ID"),
+        "name": rx_fields.String(),
+        "purpose": rx_fields.String(),
+    },
+)
+
+doodad_create_failure = api.model(
+    "DoodadBulkCreateFailure",
+    {
+        "index": rx_fields.Integer(description="Position in the submitted list"),
+        "item": rx_fields.Raw(description="The submitted payload that was rejected"),
+        "error": rx_fields.String(description="Why the item was rejected"),
+    },
+)
+
+doodad_bulk_create_request = api.model(
+    "DoodadBulkCreateRequest",
+    {
+        "items": rx_fields.List(
+            rx_fields.Nested(doodad_item),
+            required=True,
+            description="Doodads to create",
+        )
+    },
+)
+
+doodad_bulk_create_response = api.model(
+    "DoodadBulkCreateResponse",
+    {
+        "success_count": rx_fields.Integer(description="Number of doodads created"),
+        "failure_count": rx_fields.Integer(description="Number of rejected items"),
+        "succeeded": rx_fields.List(rx_fields.Nested(doodad_entity)),
+        "failed": rx_fields.List(rx_fields.Nested(doodad_create_failure)),
+    },
+)
+
+doodad_bulk_delete_request = api.model(
+    "DoodadBulkDeleteRequest",
+    {
+        "ids": rx_fields.List(
+            rx_fields.Integer,
+            required=True,
+            description="Doodad IDs to delete",
+        )
+    },
+)
+
+doodad_bulk_delete_response = api.model(
+    "DoodadBulkDeleteResponse",
+    {
+        "success_count": rx_fields.Integer(description="Number of doodads deleted"),
+        "failure_count": rx_fields.Integer(description="Number of ids not found"),
+        "requested": rx_fields.List(rx_fields.Integer, description="Ids as received"),
+        "deleted": rx_fields.List(rx_fields.Integer),
+        "not_found": rx_fields.List(rx_fields.Integer),
+    },
+)
 
 
 @api.route("/")
@@ -55,3 +124,38 @@ class DoodadIdResource(Resource):
         changes: DoodadInterface = request.parsed_obj
         Doodad = DoodadService.get_by_id(doodadId)
         return DoodadService.update(Doodad, changes)
+
+
+@api.route("/bulk")
+class DoodadBulkResource(Resource):
+    """Create or delete many Doodads in a single request"""
+
+    @api.expect(doodad_bulk_create_request)
+    @api.marshal_with(doodad_bulk_create_response)
+    def post(self):
+        """Create a batch of Doodads
+
+        Send ``{"items": [{"name": ..., "purpose": ...}, ...]}``. Valid items
+        are created even if others are rejected; the response reports how many
+        succeeded, how many failed and exactly which items failed and why.
+        """
+        payload = request.get_json(silent=True) or {}
+        result = DoodadService.create_bulk(payload.get("items", []))
+        return {
+            "success_count": result["success_count"],
+            "failure_count": result["failure_count"],
+            "succeeded": DoodadSchema(many=True).dump(result["succeeded"]),
+            "failed": result["failed"],
+        }
+
+    @api.expect(doodad_bulk_delete_request)
+    @api.marshal_with(doodad_bulk_delete_response)
+    def delete(self):
+        """Delete a batch of Doodads by id
+
+        Send ``{"ids": [1, 2, 3]}``. Ids that do not exist (or were already
+        deleted earlier in the same request) are returned under ``not_found``
+        instead of failing the whole call.
+        """
+        payload = request.get_json(silent=True) or {}
+        return DoodadService.delete_bulk(payload.get("ids", []))

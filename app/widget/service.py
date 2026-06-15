@@ -1,7 +1,10 @@
 from app import db
-from typing import List
+from typing import Any, Dict, List, Sequence
+from app.shared.bulk import BulkService
 from .model import Widget
 from .interface import WidgetInterface
+
+WIDGET_FIELDS = ("name", "purpose")
 
 
 class WidgetService:
@@ -36,3 +39,13 @@ class WidgetService:
         db.session.commit()
 
         return new_widget
+
+    @staticmethod
+    def create_bulk(items: Sequence[WidgetInterface]) -> Dict[str, Any]:
+        """Create many Widgets, reporting per-item success/failure."""
+        return BulkService.bulk_create(Widget, items, WIDGET_FIELDS)
+
+    @staticmethod
+    def delete_bulk(widget_ids: Sequence[int]) -> Dict[str, Any]:
+        """Delete many Widgets by id, reporting which ids were not found."""
+        return BulkService.bulk_delete(Widget, Widget.widget_id, widget_ids)

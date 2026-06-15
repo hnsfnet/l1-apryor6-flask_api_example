@@ -92,6 +92,84 @@ class TestDoodadIdResource:
             expected = (
                 DoodadSchema()
                 .dump(Doodad(doodad_id=123, name="New Doodad", purpose="New purpose"))
-                
+
             )
             assert result == expected
+
+
+def fake_create_bulk(items):
+    # Two valid doodads created, one rejected for a missing field.
+    return dict(
+        succeeded=[
+            make_doodad(1, name="Bulk 1"),
+            make_doodad(2, name="Bulk 2"),
+        ],
+        failed=[
+            dict(index=2, item=dict(name="No purpose"),
+                 error="Missing required field(s): purpose")
+        ],
+        success_count=2,
+        failure_count=1,
+    )
+
+
+def fake_delete_bulk(ids):
+    return dict(
+        requested=[1, 2, 99, 1],
+        deleted=[1, 2],
+        not_found=[99, 1],
+        success_count=2,
+        failure_count=2,
+    )
+
+
+class TestDoodadBulkResource:
+    @patch.object(DoodadService, "create_bulk", fake_create_bulk)
+    def test_bulk_post(self, client: FlaskClient):  # noqa
+        with client:
+            payload = dict(
+                items=[
+                    dict(name="Bulk 1", purpose="p1"),
+                    dict(name="Bulk 2", purpose="p2"),
+                    dict(name="No purpose"),
+                ]
+            )
+            result = client.post(
+                f"/api/{BASE_ROUTE}/doodad/bulk", json=payload
+            ).get_json()
+
+            assert result["success_count"] == 2
+            assert result["failure_count"] == 1
+            assert len(result["succeeded"]) == 2
+            assert {d["name"] for d in result["succeeded"]} == {"Bulk 1", "Bulk 2"}
+            assert result["failed"][0]["index"] == 2
+            assert "purpose" in result["failed"][0]["error"]
+
+    def test_bulk_post_empty(self, client: FlaskClient):  # noqa
+        with patch.object(
+            DoodadService,
+            "create_bulk",
+            lambda items: dict(
+                succeeded=[], failed=[], success_count=0, failure_count=0
+            ),
+        ):
+            with client:
+                result = client.post(
+                    f"/api/{BASE_ROUTE}/doodad/bulk", json=dict(items=[])
+                ).get_json()
+                assert result["success_count"] == 0
+                assert result["failure_count"] == 0
+                assert result["succeeded"] == []
+                assert result["failed"] == []
+
+    @patch.object(DoodadService, "delete_bulk", fake_delete_bulk)
+    def test_bulk_delete(self, client: FlaskClient):  # noqa
+        with client:
+            result = client.delete(
+                f"/api/{BASE_ROUTE}/doodad/bulk", json=dict(ids=[1, 2, 99, 1])
+            ).get_json()
+
+            assert result["deleted"] == [1, 2]
+            assert result["not_found"] == [99, 1]
+            assert result["success_count"] == 2
+            assert result["failure_count"] == 2
