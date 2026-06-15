@@ -1,4 +1,4 @@
-from flask import request
+from flask import jsonify, request
 from flask_accepts import accepts, responds
 from flask_restx import Namespace, Resource
 from flask.wrappers import Response
@@ -24,6 +24,7 @@ class WidgetResource(Resource):
 
     @accepts(schema=WidgetSchema, api=api)
     @responds(schema=WidgetSchema)
+    @api.response(400, "Request body failed validation")
     def post(self) -> Widget:
         """Create a Single Widget"""
 
@@ -34,23 +35,27 @@ class WidgetResource(Resource):
 @api.param("widgetId", "Widget database ID")
 class WidgetIdResource(Resource):
     @responds(schema=WidgetSchema)
+    @api.response(404, "Widget not found")
     def get(self, widgetId: int) -> Widget:
         """Get Single Widget"""
 
         return WidgetService.get_by_id(widgetId)
 
+    @api.response(200, "Widget deleted")
+    @api.response(404, "Widget not found")
     def delete(self, widgetId: int) -> Response:
         """Delete Single Widget"""
-        from flask import jsonify
 
         id = WidgetService.delete_by_id(widgetId)
         return jsonify(dict(status="Success", id=id))
 
     @accepts(schema=WidgetSchema, api=api)
     @responds(schema=WidgetSchema)
+    @api.response(400, "Request body failed validation")
+    @api.response(404, "Widget not found")
     def put(self, widgetId: int) -> Widget:
         """Update Single Widget"""
 
         changes: WidgetInterface = request.parsed_obj
-        Widget = WidgetService.get_by_id(widgetId)
-        return WidgetService.update(Widget, changes)
+        widget = WidgetService.get_by_id(widgetId)
+        return WidgetService.update(widget, changes)

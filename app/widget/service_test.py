@@ -1,6 +1,8 @@
 from flask_sqlalchemy import SQLAlchemy
 from typing import List
+import pytest
 from app.test.fixtures import app, db  # noqa
+from app.shared.errors import NotFoundError, ValidationError
 from .model import Widget
 from .service import WidgetService  # noqa
 from .interface import WidgetInterface
@@ -58,3 +60,27 @@ def test_create(db: SQLAlchemy):  # noqa
 
     for k in yin.keys():
         assert getattr(results[0], k) == yin[k]
+
+
+def test_get_by_id_not_found(db: SQLAlchemy):  # noqa
+    with pytest.raises(NotFoundError):
+        WidgetService.get_by_id(999)
+
+
+def test_delete_by_id_not_found(db: SQLAlchemy):  # noqa
+    with pytest.raises(NotFoundError):
+        WidgetService.delete_by_id(999)
+
+
+def test_create_missing_fields_rejected(db: SQLAlchemy):  # noqa
+    with pytest.raises(ValidationError):
+        WidgetService.create(dict(name="only a name"))
+    assert Widget.query.all() == []
+
+
+def test_update_empty_field_rejected(db: SQLAlchemy):  # noqa
+    widget: Widget = Widget(widget_id=1, name="Original", purpose="Original")
+    db.session.add(widget)
+    db.session.commit()
+    with pytest.raises(ValidationError):
+        WidgetService.update(widget, dict(name=""))

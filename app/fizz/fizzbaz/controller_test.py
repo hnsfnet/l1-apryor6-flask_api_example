@@ -74,11 +74,11 @@ class TestFizzbazIdResource:
             expected = Fizzbaz(fizzbaz_id=123)
             assert result["fizzbazId"] == expected.fizzbaz_id
 
-    @patch.object(FizzbazService, "delete_by_id", lambda id: [id])
+    @patch.object(FizzbazService, "delete_by_id", lambda id: id)
     def test_delete(self, client: FlaskClient):  # noqa
         with client:
             result = client.delete(f"/api/{BASE_ROUTE}/fizzbaz/123").get_json()
-            expected = dict(status="Success", id=[123])
+            expected = dict(status="Success", id=123)
             assert result == expected
 
     @patch.object(FizzbazService, "get_by_id", lambda id: make_fizzbaz(id=id))

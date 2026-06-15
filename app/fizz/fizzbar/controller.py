@@ -1,4 +1,4 @@
-from flask import request
+from flask import jsonify, request
 from flask_accepts import accepts, responds
 from flask_restx import Namespace, Resource
 from flask.wrappers import Response
@@ -24,6 +24,7 @@ class FizzbarResource(Resource):
 
     @accepts(schema=FizzbarSchema, api=api)
     @responds(schema=FizzbarSchema)
+    @api.response(400, "Request body failed validation")
     def post(self) -> Fizzbar:
         """Create a Single Fizzbar"""
 
@@ -34,24 +35,27 @@ class FizzbarResource(Resource):
 @api.param("fizzbarId", "Fizzbar database ID")
 class FizzbarIdResource(Resource):
     @responds(schema=FizzbarSchema)
+    @api.response(404, "Fizzbar not found")
     def get(self, fizzbarId: int) -> Fizzbar:
         """Get Single Fizzbar"""
 
         return FizzbarService.get_by_id(fizzbarId)
 
+    @api.response(200, "Fizzbar deleted")
+    @api.response(404, "Fizzbar not found")
     def delete(self, fizzbarId: int) -> Response:
         """Delete Single Fizzbar"""
-        from flask import jsonify
 
-        print("fizzbarId = ", fizzbarId)
         id = FizzbarService.delete_by_id(fizzbarId)
         return jsonify(dict(status="Success", id=id))
 
     @accepts(schema=FizzbarSchema, api=api)
     @responds(schema=FizzbarSchema)
+    @api.response(400, "Request body failed validation")
+    @api.response(404, "Fizzbar not found")
     def put(self, fizzbarId: int) -> Fizzbar:
         """Update Single Fizzbar"""
 
         changes: FizzbarInterface = request.parsed_obj
-        Fizzbar = FizzbarService.get_by_id(fizzbarId)
-        return FizzbarService.update(Fizzbar, changes)
+        fizzbar = FizzbarService.get_by_id(fizzbarId)
+        return FizzbarService.update(fizzbar, changes)

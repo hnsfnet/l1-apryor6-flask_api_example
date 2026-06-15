@@ -74,11 +74,11 @@ class TestWhatsitIdResource:
             expected = Whatsit(whatsit_id=123)
             assert result["whatsitId"] == expected.whatsit_id
 
-    @patch.object(WhatsitService, "delete_by_id", lambda id: [id])
+    @patch.object(WhatsitService, "delete_by_id", lambda id: id)
     def test_delete(self, client: FlaskClient):  # noqa
         with client:
             result = client.delete(f"/api/{BASE_ROUTE}/whatsit/123").get_json()
-            expected = dict(status="Success", id=[123])
+            expected = dict(status="Success", id=123)
             assert result == expected
 
     @patch.object(WhatsitService, "get_by_id", lambda id: make_whatsit(id=id))

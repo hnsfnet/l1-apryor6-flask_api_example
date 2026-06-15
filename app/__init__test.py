@@ -10,4 +10,7 @@ def test_app_healthy(app, client):  # noqa
         resp = client.get("/health")
         assert resp.status_code == 200
         assert resp.is_json
-        assert resp.json == "healthy"
+        body = resp.get_json()
+        assert body["status"] == "ok"
+        assert body["service"] == "Flaskerific API"
+        assert "version" in body

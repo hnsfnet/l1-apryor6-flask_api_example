@@ -1,4 +1,4 @@
-from flask import request
+from flask import jsonify, request
 from flask_accepts import accepts, responds
 from flask_restx import Namespace, Resource
 from flask.wrappers import Response
@@ -24,6 +24,7 @@ class WhatsitResource(Resource):
 
     @accepts(schema=WhatsitSchema, api=api)
     @responds(schema=WhatsitSchema)
+    @api.response(400, 'Request body failed validation')
     def post(self) -> Whatsit:
         '''Create a Single Whatsit'''
 
@@ -34,23 +35,27 @@ class WhatsitResource(Resource):
 @api.param('whatsitId', 'Whatsit database ID')
 class WhatsitIdResource(Resource):
     @responds(schema=WhatsitSchema)
+    @api.response(404, 'Whatsit not found')
     def get(self, whatsitId: int) -> Whatsit:
         '''Get Single Whatsit'''
 
         return WhatsitService.get_by_id(whatsitId)
 
+    @api.response(200, 'Whatsit deleted')
+    @api.response(404, 'Whatsit not found')
     def delete(self, whatsitId: int) -> Response:
         '''Delete Single Whatsit'''
-        from flask import jsonify
 
         id = WhatsitService.delete_by_id(whatsitId)
         return jsonify(dict(status='Success', id=id))
 
     @accepts(schema=WhatsitSchema, api=api)
     @responds(schema=WhatsitSchema)
+    @api.response(400, 'Request body failed validation')
+    @api.response(404, 'Whatsit not found')
     def put(self, whatsitId: int) -> Whatsit:
         '''Update Single Whatsit'''
 
         changes: WhatsitInterface = request.parsed_obj
-        Whatsit = WhatsitService.get_by_id(whatsitId)
-        return WhatsitService.update(Whatsit, changes)
+        whatsit = WhatsitService.get_by_id(whatsitId)
+        return WhatsitService.update(whatsit, changes)

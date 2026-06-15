@@ -1,4 +1,4 @@
-from flask import request
+from flask import jsonify, request
 from flask_accepts import accepts, responds
 from flask_restx import Namespace, Resource
 from flask.wrappers import Response
@@ -24,6 +24,7 @@ class DoodadResource(Resource):
 
     @accepts(schema=DoodadSchema, api=api)
     @responds(schema=DoodadSchema)
+    @api.response(400, "Request body failed validation")
     def post(self) -> Doodad:
         """Create a Single Doodad"""
 
@@ -34,24 +35,27 @@ class DoodadResource(Resource):
 @api.param("doodadId", "Doodad database ID")
 class DoodadIdResource(Resource):
     @responds(schema=DoodadSchema)
+    @api.response(404, "Doodad not found")
     def get(self, doodadId: int) -> Doodad:
         """Get Single Doodad"""
 
         return DoodadService.get_by_id(doodadId)
 
+    @api.response(200, "Doodad deleted")
+    @api.response(404, "Doodad not found")
     def delete(self, doodadId: int) -> Response:
         """Delete Single Doodad"""
-        from flask import jsonify
 
-        print("doodadId = ", doodadId)
         id = DoodadService.delete_by_id(doodadId)
         return jsonify(dict(status="Success", id=id))
 
     @accepts(schema=DoodadSchema, api=api)
     @responds(schema=DoodadSchema)
+    @api.response(400, "Request body failed validation")
+    @api.response(404, "Doodad not found")
     def put(self, doodadId: int) -> Doodad:
         """Update Single Doodad"""
 
         changes: DoodadInterface = request.parsed_obj
-        Doodad = DoodadService.get_by_id(doodadId)
-        return DoodadService.update(Doodad, changes)
+        doodad = DoodadService.get_by_id(doodadId)
+        return DoodadService.update(doodad, changes)

@@ -1,7 +1,8 @@
 from unittest.mock import patch
 from flask.testing import FlaskClient
+from flask_sqlalchemy import SQLAlchemy
 
-from app.test.fixtures import client, app  # noqa
+from app.test.fixtures import client, app, db  # noqa
 from .service import WidgetService
 from .schema import WidgetSchema
 from .model import Widget
@@ -91,6 +92,62 @@ class TestWidgetIdResource:
             expected = (
                 WidgetSchema()
                 .dump(Widget(widget_id=123, name="New Widget", purpose="New purpose"))
-                
+
             )
             assert result == expected
+
+
+class TestWidgetErrorHandling:
+    def test_get_not_found(self, client: FlaskClient, db: SQLAlchemy):  # noqa
+        with client:
+            resp = client.get(f"/api/{BASE_ROUTE}/999")
+            assert resp.status_code == 404
+            body = resp.get_json()
+            assert body["error"] == "not_found"
+            assert body["resource"] == "Widget"
+            assert body["resourceId"] == 999
+
+    def test_delete_not_found(self, client: FlaskClient, db: SQLAlchemy):  # noqa
+        with client:
+            resp = client.delete(f"/api/{BASE_ROUTE}/999")
+            assert resp.status_code == 404
+            assert resp.get_json()["error"] == "not_found"
+
+    def test_put_not_found(self, client: FlaskClient, db: SQLAlchemy):  # noqa
+        with client:
+            resp = client.put(
+                f"/api/{BASE_ROUTE}/999",
+                json={"name": "Nope", "purpose": "Nope"},
+            )
+            assert resp.status_code == 404
+            assert resp.get_json()["error"] == "not_found"
+
+    def test_post_missing_fields(self, client: FlaskClient):  # noqa
+        with client:
+            resp = client.post(f"/api/{BASE_ROUTE}/", json={})
+            assert resp.status_code == 400
+            body = resp.get_json()
+            assert body["error"] == "validation_error"
+            assert "name" in body["fields"]
+            assert "purpose" in body["fields"]
+
+    def test_post_empty_field(self, client: FlaskClient):  # noqa
+        with client:
+            resp = client.post(
+                f"/api/{BASE_ROUTE}/", json={"name": "   ", "purpose": "ok"}
+            )
+            assert resp.status_code == 400
+            body = resp.get_json()
+            assert body["error"] == "validation_error"
+            assert "name" in body["fields"]
+            assert "purpose" not in body["fields"]
+
+    def test_put_empty_field(self, client: FlaskClient, db: SQLAlchemy):  # noqa
+        db.session.add(make_widget(id=1, name="Original", purpose="Original"))
+        db.session.commit()
+        with client:
+            resp = client.put(f"/api/{BASE_ROUTE}/1", json={"name": ""})
+            assert resp.status_code == 400
+            assert resp.get_json()["error"] == "validation_error"
+            # the original record must be left untouched
+            assert Widget.query.get(1).name == "Original"

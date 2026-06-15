@@ -74,11 +74,11 @@ class TestDoodadIdResource:
             expected = Doodad(doodad_id=123)
             assert result["doodadId"] == expected.doodad_id
 
-    @patch.object(DoodadService, "delete_by_id", lambda id: [id])
+    @patch.object(DoodadService, "delete_by_id", lambda id: id)
     def test_delete(self, client: FlaskClient):  # noqa
         with client:
             result = client.delete(f"/api/{BASE_ROUTE}/doodad/123").get_json()
-            expected = dict(status="Success", id=[123])
+            expected = dict(status="Success", id=123)
             assert result == expected
 
     @patch.object(DoodadService, "get_by_id", lambda id: make_doodad(id=id))
