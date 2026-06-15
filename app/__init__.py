@@ -18,6 +18,27 @@ def create_app(env=None):
 
     @app.route("/health")
     def health():
-        return jsonify("healthy")
+        from app.shared.query.service import QueryService
+
+        db_ok = QueryService.check_db_connectivity()
+
+        # Check which modules are registered by inspecting blueprints
+        registered_modules = []
+        for bp_name in app.blueprints:
+            registered_modules.append(bp_name)
+
+        # Also check the restx namespaces
+        registered_namespaces = []
+        for ns in api.namespaces:
+            registered_namespaces.append(ns.name if hasattr(ns, 'name') else str(ns))
+
+        status = "healthy" if db_ok else "degraded"
+
+        return jsonify({
+            "status": status,
+            "database": "connected" if db_ok else "unavailable",
+            "modules": registered_modules,
+            "namespaces": registered_namespaces,
+        })
 
     return app

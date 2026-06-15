@@ -41,6 +41,56 @@ python wsgi.py
 Navigate to the posted URL in your terminal to be greeted with Swagger, where you can test out the API.
 
 
+## System Overview & Health Endpoints
+
+### GET /api/overview/
+
+Returns a summary of all registered resource modules, including:
+- **count**: total number of records in the database for each resource type
+- **latest**: the most recent record (by primary key) with `id`, `name`, and `purpose` fields; `null` if no records exist
+
+Example response:
+
+```json
+{
+  "resources": {
+    "widget":  { "count": 3, "latest": { "id": 3, "name": "Pizza Oven", "purpose": "Bake delicious pizza" } },
+    "fizzbar": { "count": 3, "latest": { "id": 3, "name": "Pizza Oven", "purpose": "Bake delicious pizza" } },
+    "fizzbaz": { "count": 0, "latest": null },
+    "doodad":  { "count": 3, "latest": { "id": 3, "name": "Pizza Oven", "purpose": "Bake delicious pizza" } },
+    "whatsit": { "count": 0, "latest": null }
+  }
+}
+```
+
+This endpoint is safe to call even when the database is empty — it will return counts of 0 and `null` for latest without errors.
+
+### GET /health
+
+Returns system health information including:
+- **status**: `"healthy"` or `"degraded"`
+- **database**: `"connected"` or `"unavailable"`
+- **modules**: list of registered Flask blueprints
+- **namespaces**: list of registered flask-restx namespaces (API modules)
+
+Example response:
+
+```json
+{
+  "status": "healthy",
+  "database": "connected",
+  "modules": ["other_api"],
+  "namespaces": ["Widget", "Fizzbar", "Fizzbaz", "Doodad", "Whatsit", "Overview"]
+}
+```
+
+### Adding New Modules to the Overview
+
+The overview uses the shared `QueryService.get_resource_summary()` method from `app/shared/query/service.py`. To add a new resource module to the overview, simply add a descriptor dict to `_get_resource_descriptors()` in `app/shared/overview/controller.py`:
+
+```python
+{"name": "new_resource", "model": NewResource, "id_col": "new_resource_id"},
+```
 
 
 ## Running tests
