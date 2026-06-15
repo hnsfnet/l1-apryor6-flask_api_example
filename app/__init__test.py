@@ -10,4 +10,6 @@ def test_app_healthy(app, client):  # noqa
         resp = client.get("/health")
         assert resp.status_code == 200
         assert resp.is_json
-        assert resp.json == "healthy"
+        assert resp.json["status"] == "healthy"
+        assert resp.json["database"] in ("connected", "disconnected")
+        assert "widget" in resp.json["modules"]

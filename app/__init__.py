@@ -18,6 +18,24 @@ def create_app(env=None):
 
     @app.route("/health")
     def health():
-        return jsonify("healthy")
+        from sqlalchemy import text
+        from app.shared.overview.service import OverviewService
+
+        # Lightweight DB connectivity probe so env issues are visible here
+        # instead of only surfacing deep in request logs.
+        database = "connected"
+        try:
+            db.session.execute(text("SELECT 1"))
+        except Exception:
+            db.session.rollback()
+            database = "disconnected"
+
+        return jsonify(
+            {
+                "status": "healthy",
+                "database": database,
+                "modules": OverviewService.module_names(),
+            }
+        )
 
     return app
