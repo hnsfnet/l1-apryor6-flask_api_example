@@ -47,6 +47,33 @@ def test_bulk_create_partial_failure_persists_valid_rows(db: SQLAlchemy):  # noq
     assert "object" in by_index[2]["error"]
 
 
+def test_bulk_create_db_error_rolls_back_only_failing_row(db: SQLAlchemy):  # noqa
+    # The test above covers items rejected by validation *before* they reach
+    # the database. This covers the other partial-failure path: an item that
+    # passes validation but raises at the database layer (here, a value the
+    # column cannot bind). Its savepoint must roll back on its own without
+    # discarding the valid rows created before and after it.
+    items = [
+        dict(name="Good A", purpose="p"),
+        dict(name={"bad": "bind"}, purpose="p"),  # passes None-check, fails at bind
+        dict(name="Good B", purpose="p"),
+    ]
+
+    result = BulkService.bulk_create(Widget, items, FIELDS)
+
+    assert result["success_count"] == 2
+    assert result["failure_count"] == 1
+
+    # Only the offending row is reported, keeping its original index and payload.
+    assert [f["index"] for f in result["failed"]] == [1]
+    assert result["failed"][0]["item"] == dict(name={"bad": "bind"}, purpose="p")
+    assert result["failed"][0]["error"]  # a non-empty database error message
+
+    # The rows on either side of the failure are still persisted.
+    rows: List[Widget] = Widget.query.all()
+    assert {r.name for r in rows} == {"Good A", "Good B"}
+
+
 def test_bulk_create_empty_list_is_a_noop(db: SQLAlchemy):  # noqa
     result = BulkService.bulk_create(Widget, [], FIELDS)
 
