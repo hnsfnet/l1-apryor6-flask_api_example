@@ -1,7 +1,8 @@
 from app import db
-from typing import List
+from typing import List, Tuple, Dict
 from .model import Doodad
 from .interface import DoodadInterface
+from app.shared.batch import batch_create, batch_delete
 
 
 class DoodadService:
@@ -36,3 +37,29 @@ class DoodadService:
         db.session.commit()
 
         return new_doodad
+
+    @staticmethod
+    def create_many(items: List[dict]) -> Tuple[List[Doodad], List[Dict]]:
+        """
+        Batch create doodads.
+
+        Args:
+            items: List of dicts with 'name' and optional 'purpose'.
+
+        Returns:
+            Tuple of (successful_doodads, failed_items).
+        """
+        return batch_create(Doodad, items)
+
+    @staticmethod
+    def delete_many(ids: List[int]) -> Tuple[List[int], List[Dict]]:
+        """
+        Batch delete doodads by ID.
+
+        Args:
+            ids: List of doodad IDs to delete.
+
+        Returns:
+            Tuple of (successful_ids, failed_items).
+        """
+        return batch_delete(Doodad, ids, Doodad.doodad_id)

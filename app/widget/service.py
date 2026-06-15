@@ -1,7 +1,8 @@
 from app import db
-from typing import List
+from typing import List, Tuple, Dict
 from .model import Widget
 from .interface import WidgetInterface
+from app.shared.batch import batch_create, batch_delete
 
 
 class WidgetService:
@@ -36,3 +37,29 @@ class WidgetService:
         db.session.commit()
 
         return new_widget
+
+    @staticmethod
+    def create_many(items: List[dict]) -> Tuple[List[Widget], List[Dict]]:
+        """
+        Batch create widgets.
+
+        Args:
+            items: List of dicts with 'name' and optional 'purpose'.
+
+        Returns:
+            Tuple of (successful_widgets, failed_items).
+        """
+        return batch_create(Widget, items)
+
+    @staticmethod
+    def delete_many(ids: List[int]) -> Tuple[List[int], List[Dict]]:
+        """
+        Batch delete widgets by ID.
+
+        Args:
+            ids: List of widget IDs to delete.
+
+        Returns:
+            Tuple of (successful_ids, failed_items).
+        """
+        return batch_delete(Widget, ids, Widget.widget_id)
